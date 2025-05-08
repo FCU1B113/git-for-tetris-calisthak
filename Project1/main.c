@@ -1,5 +1,8 @@
 #include <stdio.h>
 #include <stdbool.h>
+#include <stdlib.h>
+#include <time.h>
+#include <Windows.h>
 
 #define CANVAS_WIDTH 10
 #define CANVAS_HEIGHT 20
@@ -53,7 +56,7 @@ typedef struct {
 
 
 
-Shape shape[7] = {
+Shape shapes[7] = {
     {
         .shape = I,
         .color = CYAN,
@@ -191,8 +194,8 @@ Shape shape[7] = {
             },
             {
                 {1,0,0},
-                {1,1,0},
-                {0,1,0},
+                {1, 1, 0},
+                { 0,1,0 },
             }
         }
     },
@@ -269,6 +272,87 @@ void resetBlock(Block* block) {
     block->current = false;
 }
 
+void printCanvas(Block canvas[CANVAS_HEIGHT][CANVAS_WIDTH], State* state) {
+    printf("\033[0;0H\n");
+    for (int i = 0; i < CANVAS_HEIGHT; i++) {
+        printf("|");
+        for (int j = 0; j < CANVAS_WIDTH; j++) {
+            printf("\033[%dm\u3000", canvas[i][j].color);
+        }
+        printf("\033[0m");
+        printf("|\n");
+    }
+
+    printf("\033[%d;%dHNext:", 3, CANVAS_WIDTH * 2 + 5);
+
+    for (int i = 1; i < 4; i++) {
+        Shape shapeData = shapes[state->queue[i]];
+        for (int j = 0; i < 4; i++) {
+            printf("\033[%d;%dHNext:", i * 4 + j, CANVAS_WIDTH * 2 + 15);
+            for (int k = 0; k < 4; k++) {
+                if(j < shapeData.size && k < shapeData.size && shapeData.rotates[0][j][k]){
+                    printf("\x1b[%dm  ", shapeData.color);
+                }else{
+                    printf("\x1b[0m  ");
+        }
+    }
+}
+
+        bool move(Block canvas[CANVAS_HEIGHT][CANVAS_WIDTH], int originalX, int originalY, int originalRotate, int newX, int newY, int newRotate, ShapeId shapeId) {
+    Shape shapeData = shapes[shapeId];
+    int size = shapeData.size;
+
+    for (int i = 0; i < size; i++) {
+        for (int j = 0; j < size; j++) {
+            if (shapeData.rotates[newRotate][i][j]) {
+                if (newX + j < 0 || newX + j >= CANVAS_WIDTH || newY + i < 0 || newY + i >= CANVAS_HEIGHT) {
+                    return false;
+                }
+                if(!canvas[newY + i][newX + j]).current&& canvas[newY + i][newX + j].shape != EMPTY){
+                    return false;
+                }
+            }
+        }
+    }
+
+    for (int i = 0; i < size; i++) {
+        for (int j = 0; j < size; j++) {
+            if (shapeData.rotates[originalRotate][i][j])
+                resetBlock(&canvas[originalY + i][originalX + j]);
+        }
+    }
+    
+    for (int i = 0; i < size; i++){
+        for (int j = 0; j < size; j++){
+            if (shapeData.rotates[newRotate][i][j]){
+                setBlock(&canvas[newY + i][newX + j], shapeData.color, shapeId, true);
+            }
+        }
+    }
+    return true;
+}
+
+
+void logic(Block canvas[CANVAS_HEIGHT][CANVAS_WIDTH], State *state) {
+    if (move(canvas, state->x, state->y, state->rotate, state->x, state->y + 1, state->rotate, state->queue[0]))
+        state->y++;
+    else {
+        state->score += clearLine(canvas);
+
+        state->x = CANVAS_WIDTH / 2;
+        state->y = 0;
+        state->rotate = 0;
+        state->falltime = 0;
+        state->queue[0] = state->queue[1];
+        state->queue[1] = state->queue[2];
+        state->queue[2] = state->queue[3];
+        state->queue[3] = rand() % 7;
+    }
+
+    return;
+}
+
+
 int main() {
     State state = {
         .x = CANVAS_WIDTH / 2,
@@ -278,31 +362,30 @@ int main() {
         .fallTime = 0.
     };
 
-    Block canvas[CANVAS_HEIGHT][CANVAS_WIDTH];
+    for (int i = 0; i < 4; i++) {
+        state.queue[i] = rand() % 7;
+    }
 
+   Block canvas[CANVAS_HEIGHT][CANVAS_WIDTH];
    for (int i = 0; i < CANVAS_HEIGHT; i++) {
         for (int j = 0; j < CANVAS_WIDTH; j++) {
             resetBlock(&canvas[i][j]);
         }
    }
 
-   Shape shapeData = shape[1];
+   Shape shapeData = shapes[state.queue[0]];
 
    for (int i = 0; i < shapeData.size; i++) {
        for (int j = 0; j < shapeData.size; j++) {
            if (shapeData.rotates[state.rotate][i][j] == 1)
-               setBlock(&canvas[state.y + i][state.x + j], shapeData.color, shapeData.shape, true);
+               setBlock(&canvas[state.y + i][state.x + j], shapeData.color, state.queue, true);
        }
    }
 
-   printf("\033[0;0H\n");
-   for (int i = 0; i < CANVAS_HEIGHT; i++) {
-       printf("|");
-       for (int j = 0; j < CANVAS_WIDTH; j++) {
-           printf("\033[%dm\u3000", canvas[i][j].color);
-       }
-       printf("\033[0m");
-       printf("|\n");
+   while (1) {
+       printCanvas(canvas, &state);
+       logic(canvas, &state);
+       Sleep(100);
    }
 
     return 0;
